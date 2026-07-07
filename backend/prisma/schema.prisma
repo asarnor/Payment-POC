@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentStatus {
+  pending
+  authorized
+  captured
+  settled
+  failed
+  refunded
+}
+
+enum OutboxStatus {
+  pending
+  processing
+  done
+  dead_letter
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  merchantId           String        @map("merchant_id")
+  amountMinorUnits     Int           @map("amount_minor_units")
+  currency             String        @db.Char(3)
+  status               PaymentStatus @default(pending)
+  paymentMethodToken   String        @map("payment_method_token")
+  idempotencyKey       String        @unique @map("idempotency_key")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  stateTransitions PaymentStateTransition[]
+  outboxEvents     OutboxEvent[]
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model PaymentStateTransition {
+  id            String   @id @default(uuid())
+  paymentId     String   @map("payment_id")
+  fromStatus    String   @map("from_status")
+  toStatus      String   @map("to_status")
+  reason        String?
+  actor         String
+  correlationId String   @map("correlation_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("payment_state_transitions")
+}
+
+model IdempotencyRecord {
+  idempotencyKey   String   @id @map("idempotency_key")
+  endpoint         String
+  requestHash      String   @map("request_hash")
+  responseSnapshot Json     @map("response_snapshot")
+  status           String
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id           String      @id @default(uuid())
+  paymentId    String      @map("payment_id")
+  eventType    String      @map("event_type")
+  payload      Json
+  status       OutboxStatus @default(pending)
+  attempts     Int         @default(0)
+  nextAttemptAt DateTime   @default(now()) @map("next_attempt_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_events")
+}
