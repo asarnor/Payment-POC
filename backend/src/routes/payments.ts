@@ -7,6 +7,12 @@ import {
   storeIdempotencyRecord,
 } from '../modules';
 import { AppError, buildErrorEnvelope } from '../middleware';
+import {
+  paymentsCreatedTotal,
+  paymentsCapturedTotal,
+  paymentsRefundedTotal,
+  withSpan,
+} from '../observability';
 
 // ─── Zod Schemas ───────────────────────────────────────────────────────────────
 
@@ -114,6 +120,7 @@ export function createPaymentRoutes(prisma: PrismaClient): Router {
         statusCode: 201,
       });
 
+      paymentsCreatedTotal.inc();
       res.status(201).json(responseBody);
     } catch (err) {
       next(err);
@@ -316,6 +323,7 @@ export function createPaymentRoutes(prisma: PrismaClient): Router {
         statusCode: 200,
       });
 
+      paymentsCapturedTotal.inc();
       res.json(responseBody);
     } catch (err) {
       next(err);
@@ -399,6 +407,7 @@ export function createPaymentRoutes(prisma: PrismaClient): Router {
         statusCode: 200,
       });
 
+      paymentsRefundedTotal.inc();
       res.json(responseBody);
     } catch (err) {
       next(err);
