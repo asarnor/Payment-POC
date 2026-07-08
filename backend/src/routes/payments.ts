@@ -32,7 +32,10 @@ function getRequestId(req: Request): string {
 }
 
 function getMerchantId(req: Request): string {
-  return req.merchantId!;
+  if (!req.merchantId) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Merchant ID not resolved');
+  }
+  return req.merchantId;
 }
 
 // ─── Route Factory ─────────────────────────────────────────────────────────────
@@ -432,9 +435,9 @@ function formatPaymentResponse(payment: {
 }
 
 /**
- * Masks all but the last 4 characters of a token for security.
+ * Masks a payment method token for security. Never exposes full token.
  */
 function maskToken(token: string): string {
-  if (token.length <= 4) return token;
+  if (token.length <= 4) return '****';
   return '****' + token.slice(-4);
 }
