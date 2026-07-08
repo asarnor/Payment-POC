@@ -10,6 +10,7 @@
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "generate": "prisma generate",
+    "worker": "ts-node-dev --respawn --transpile-only src/worker/index.ts",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
