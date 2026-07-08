@@ -302,7 +302,7 @@ export class SettlementWorker {
       await tx.paymentStateTransition.create({
         data: {
           paymentId,
-          fromStatus: PaymentStatus.captured,
+          fromStatus: payment.status,
           toStatus: PaymentStatus.settled,
           actor: 'system:settlement-worker',
           correlationId,
