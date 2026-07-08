@@ -19,11 +19,28 @@ export interface StoreIdempotencyParams {
 }
 
 /**
+ * Recursively sorts object keys to produce a deterministic structure.
+ */
+function sortKeys(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(sortKeys);
+  }
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    sorted[key] = sortKeys((value as Record<string, unknown>)[key]);
+  }
+  return sorted;
+}
+
+/**
  * Computes a SHA-256 hash of the request body for comparison.
- * Ensures deterministic serialization via sorted keys.
+ * Ensures deterministic serialization via recursively sorted keys.
  */
 export function computeRequestHash(body: unknown): string {
-  const serialized = JSON.stringify(body, Object.keys(body as object).sort());
+  const serialized = JSON.stringify(sortKeys(body));
   return crypto.createHash('sha256').update(serialized).digest('hex');
 }
 
