@@ -61,7 +61,7 @@ if (process.env.NODE_ENV !== 'test') {
   // ─── Graceful shutdown ──────────────────────────────────────────────────
   async function shutdown(signal: string): Promise<void> {
     logger.info({ signal }, 'Received shutdown signal');
-    server.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     await shutdownTracing();
     await prisma.$disconnect();
     process.exit(0);

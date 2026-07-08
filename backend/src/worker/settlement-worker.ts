@@ -206,7 +206,6 @@ export class SettlementWorker {
     const payload = event.payload as Record<string, unknown>;
     const correlationId = (payload.correlation_id as string) || 'unknown';
     const attempt = event.attempts + 1;
-    const startTime = process.hrtime.bigint();
 
     const logContext = {
       eventId: event.id,
@@ -222,6 +221,8 @@ export class SettlementWorker {
       'correlation.id': correlationId,
       'settlement.attempt': attempt,
     }, async () => {
+    const startTime = process.hrtime.bigint();
+
     // Mark as processing
     await this.prisma.outboxEvent.update({
       where: { id: event.id },
@@ -246,10 +247,8 @@ export class SettlementWorker {
 
       this.logger.info(logContext, 'Settlement succeeded');
       this.metrics.onSettled();
-      this.metrics.onProcessingDuration(Number(process.hrtime.bigint() - startTime) / 1e9);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      this.metrics.onProcessingDuration(Number(process.hrtime.bigint() - startTime) / 1e9);
 
       if (attempt >= this.config.maxAttempts) {
         // Dead letter
@@ -290,6 +289,8 @@ export class SettlementWorker {
         );
         this.metrics.onRetry();
       }
+    } finally {
+      this.metrics.onProcessingDuration(Number(process.hrtime.bigint() - startTime) / 1e9);
     }
     }); // end withSpan
   }
