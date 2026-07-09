@@ -54,7 +54,7 @@ npm run typecheck    # TypeScript type checking
 ### API authentication
 
 All `/payments` endpoints require:
-- `Authorization: ****** header (set `API_KEY` in `.env`)
+- `Authorization` header with a valid ****** (set `API_KEY` in `.env`)
 - `X-Merchant-Id: <merchant_id>` header (simulates tenant context derived from auth token)
 
 Example:
