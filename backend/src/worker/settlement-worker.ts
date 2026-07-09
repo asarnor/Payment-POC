@@ -1,5 +1,6 @@
 import { PrismaClient, PaymentStatus, OutboxStatus } from '@prisma/client';
 import { isValidTransition } from '../modules/state-machine';
+import { withSpan } from '../observability/tracing';
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
 
@@ -37,6 +38,25 @@ export interface WorkerLogger {
   warn(obj: Record<string, unknown>, msg: string): void;
   error(obj: Record<string, unknown>, msg: string): void;
 }
+
+/**
+ * Optional metrics hooks — injected by the entrypoint so the worker core stays testable.
+ */
+export interface WorkerMetrics {
+  onQueueDepth(depth: number): void;
+  onProcessingDuration(durationSeconds: number): void;
+  onRetry(): void;
+  onDeadLetter(): void;
+  onSettled(): void;
+}
+
+const noopMetrics: WorkerMetrics = {
+  onQueueDepth: () => {},
+  onProcessingDuration: () => {},
+  onRetry: () => {},
+  onDeadLetter: () => {},
+  onSettled: () => {},
+};
 
 // ─── Settlement simulation ─────────────────────────────────────────────────────
 
@@ -86,12 +106,16 @@ export class SettlementWorker {
   private running = false;
   private stopping = false;
   private processing = false;
+  private readonly metrics: WorkerMetrics;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly logger: WorkerLogger,
     private readonly config: WorkerConfig = DEFAULT_CONFIG,
-  ) {}
+    metrics?: WorkerMetrics,
+  ) {
+    this.metrics = metrics || noopMetrics;
+  }
 
   /**
    * Starts the polling loop.
@@ -151,6 +175,8 @@ export class SettlementWorker {
         );
       }
 
+      this.metrics.onQueueDepth(events.length);
+
       for (const event of events) {
         if (this.stopping) break;
         await this.processEvent(event);
@@ -189,6 +215,14 @@ export class SettlementWorker {
       attempt,
     };
 
+    await withSpan('settlement.process_event', {
+      'payment.id': event.paymentId,
+      'event.id': event.id,
+      'correlation.id': correlationId,
+      'settlement.attempt': attempt,
+    }, async () => {
+    const startTime = process.hrtime.bigint();
+
     // Mark as processing
     await this.prisma.outboxEvent.update({
       where: { id: event.id },
@@ -212,6 +246,7 @@ export class SettlementWorker {
       });
 
       this.logger.info(logContext, 'Settlement succeeded');
+      this.metrics.onSettled();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
 
@@ -229,6 +264,7 @@ export class SettlementWorker {
           { ...logContext, error: errorMessage, maxAttempts: this.config.maxAttempts },
           'Settlement failed permanently — moved to dead letter',
         );
+        this.metrics.onDeadLetter();
       } else {
         // Schedule retry with exponential backoff + jitter
         const backoffMs = calculateBackoff(
@@ -251,8 +287,12 @@ export class SettlementWorker {
           { ...logContext, error: errorMessage, nextAttemptAt: nextAttemptAt.toISOString(), backoffMs },
           'Settlement failed — scheduling retry',
         );
+        this.metrics.onRetry();
       }
+    } finally {
+      this.metrics.onProcessingDuration(Number(process.hrtime.bigint() - startTime) / 1e9);
     }
+    }); // end withSpan
   }
 
   /**

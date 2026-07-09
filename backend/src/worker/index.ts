@@ -1,17 +1,29 @@
 import prisma from '../prisma';
 import { SettlementWorker, DEFAULT_CONFIG, WorkerLogger } from './settlement-worker';
+import { logger as pinoLogger } from '../observability/logger';
+import { initTracing, shutdownTracing } from '../observability/tracing';
+import {
+  outboxQueueDepth,
+  outboxProcessingDurationSeconds,
+  outboxRetryTotal,
+  outboxDeadLetterTotal,
+  paymentsSettledTotal,
+} from '../observability/metrics';
 
-// ─── Logger (structured JSON via console for now; pino will be added in Stage 5) ─
+// ─── Initialize OpenTelemetry ──────────────────────────────────────────────────
+initTracing();
+
+// ─── Logger (structured JSON via pino) ─────────────────────────────────────────
 
 const logger: WorkerLogger = {
   info(obj, msg) {
-    console.log(JSON.stringify({ level: 'info', msg, ...obj, timestamp: new Date().toISOString() }));
+    pinoLogger.info(obj, msg);
   },
   warn(obj, msg) {
-    console.log(JSON.stringify({ level: 'warn', msg, ...obj, timestamp: new Date().toISOString() }));
+    pinoLogger.warn(obj, msg);
   },
   error(obj, msg) {
-    console.error(JSON.stringify({ level: 'error', msg, ...obj, timestamp: new Date().toISOString() }));
+    pinoLogger.error(obj, msg);
   },
 };
 
@@ -30,7 +42,17 @@ const config = {
 
 // ─── Start worker ──────────────────────────────────────────────────────────────
 
-const worker = new SettlementWorker(prisma, logger, config);
+import { WorkerMetrics } from './settlement-worker';
+
+const metrics: WorkerMetrics = {
+  onQueueDepth: (depth) => outboxQueueDepth.set(depth),
+  onProcessingDuration: (seconds) => outboxProcessingDurationSeconds.observe(seconds),
+  onRetry: () => outboxRetryTotal.inc(),
+  onDeadLetter: () => outboxDeadLetterTotal.inc(),
+  onSettled: () => paymentsSettledTotal.inc(),
+};
+
+const worker = new SettlementWorker(prisma, logger, config, metrics);
 
 worker.start();
 
@@ -39,6 +61,7 @@ worker.start();
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Received shutdown signal');
   await worker.stop();
+  await shutdownTracing();
   await prisma.$disconnect();
   process.exit(0);
 }
