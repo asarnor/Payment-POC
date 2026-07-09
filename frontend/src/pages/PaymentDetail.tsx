@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchPaymentDetail } from '../api';
 import type { PaymentDetail as PaymentDetailType } from '../api';
 import { StatusBadge } from '../components/StatusBadge';
+import { formatAmount } from '../utils/format';
 
 export function PaymentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,12 +14,13 @@ export function PaymentDetail() {
 
   useEffect(() => {
     if (!id) return;
+    const paymentId = id;
 
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchPaymentDetail(id!);
+        const data = await fetchPaymentDetail(paymentId);
         setPayment(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load payment');
@@ -29,11 +31,6 @@ export function PaymentDetail() {
 
     void load();
   }, [id]);
-
-  function formatAmount(minorUnits: number, currency: string): string {
-    const major = (minorUnits / 100).toFixed(2);
-    return `${currency} ${major}`;
-  }
 
   if (loading) return <div className="page"><div className="loading">Loading…</div></div>;
   if (error) return <div className="page"><div className="error-banner">{error}</div></div>;

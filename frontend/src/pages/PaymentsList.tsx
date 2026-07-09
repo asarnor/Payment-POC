@@ -4,6 +4,7 @@ import { fetchPayments } from '../api';
 import type { Payment, PaymentStatus, PaginationInfo, ListPaymentsParams } from '../api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Pagination } from '../components/Pagination';
+import { formatAmount } from '../utils/format';
 
 const STATUSES: PaymentStatus[] = ['pending', 'authorized', 'captured', 'settled', 'failed', 'refunded'];
 
@@ -53,11 +54,6 @@ export function PaymentsList() {
     setFromDate('');
     setToDate('');
     setPage(1);
-  }
-
-  function formatAmount(minorUnits: number, currency: string): string {
-    const major = (minorUnits / 100).toFixed(2);
-    return `${currency} ${major}`;
   }
 
   return (

@@ -4,7 +4,12 @@ const API_BASE = '/api';
 const MERCHANT_ID = 'merchant_001';
 
 function getApiKey(): string {
-  return import.meta.env.VITE_API_KEY || 'dev-secret-key-change-in-production';
+  const key = import.meta.env.VITE_API_KEY;
+  if (!key) {
+    console.warn('VITE_API_KEY is not set. API requests may fail authentication.');
+    return '';
+  }
+  return key as string;
 }
 
 function headers(): HeadersInit {
