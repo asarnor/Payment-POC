@@ -1,7 +1,7 @@
 import type { PaymentsListResponse, PaymentDetail, ListPaymentsParams } from './types';
 
 const API_BASE = '/api';
-const MERCHANT_ID = 'merchant_001';
+const MERCHANT_ID = 'merchant-001';
 
 function getApiKey(): string {
   const key = import.meta.env.VITE_API_KEY;
